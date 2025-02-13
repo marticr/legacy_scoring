@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  legacy_scoring:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DISPLAY=${DISPLAY}
+    network_mode: "host" # Needed for GUI in Linux 

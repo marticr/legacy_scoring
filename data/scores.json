@@ -1,0 +1,16 @@
+{
+    "participants": [],
+    "scores": [],
+    "results": {
+        "modern": {
+            "solo": {},
+            "duo": {},
+            "teams": {}
+        },
+        "urban": {
+            "solo": {},
+            "duo": {},
+            "teams": {}
+        }
+    }
+}
