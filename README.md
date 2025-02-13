@@ -31,10 +31,154 @@ A professional scoring application for dance competitions, supporting Modern and
 
 ### Using Docker
 
+The application can be run using Docker in several ways:
+
+#### Quick Start with Docker Compose
+
 ```bash
 # Build and run with Docker Compose
 docker-compose up --build
+
+# Run in detached mode
+docker-compose up -d
+
+# Stop the application
+docker-compose down
+
+# View logs
+docker-compose logs -f
+
+# Rebuild specific service
+docker-compose up --build legacy_scoring
 ```
+
+#### Accessing the GUI Application in Docker
+
+Since this is a GUI application using tkinter, accessing it in Docker requires some additional setup:
+
+##### Linux
+```bash
+# Allow X server connections
+xhost +local:docker
+
+# Add to docker-compose.yml:
+# services:
+#   legacy_scoring:
+#     environment:
+#       - DISPLAY=$DISPLAY
+#     volumes:
+#       - /tmp/.X11-unix:/tmp/.X11-unix
+#     network_mode: host
+```
+
+##### Windows with X Server (e.g., VcXsrv)
+1. Install and start VcXsrv Windows X Server
+2. Configure it to:
+   - Display number: 0
+   - Client: Start no client
+   - Extra settings: Disable access control
+3. Add to docker-compose.yml:
+```yaml
+services:
+  legacy_scoring:
+    environment:
+      - DISPLAY=host.docker.internal:0
+```
+
+##### macOS with XQuartz
+1. Install and start XQuartz
+2. Allow connections:
+```bash
+xhost +localhost
+```
+3. Add to docker-compose.yml:
+```yaml
+services:
+  legacy_scoring:
+    environment:
+      - DISPLAY=host.docker.internal:0
+```
+
+> Note: The GUI will appear directly on your desktop, not through a web browser, as this is a native application.
+
+#### Manual Docker Commands
+
+```bash
+# Build the Docker image
+docker build -t legacy_scoring .
+
+# Run the container
+docker run -p 5000:5000 \
+  -v $(pwd)/data:/app/data \
+  --name legacy_scoring \
+  legacy_scoring
+
+# Stop the container
+docker stop legacy_scoring
+
+# Remove the container
+docker rm legacy_scoring
+```
+
+#### Docker Environment Variables
+
+You can customize the application behavior using environment variables:
+
+```yaml
+# In docker-compose.yml:
+services:
+  legacy_scoring:
+    environment:
+      - DISPLAY=${DISPLAY}
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+```
+
+#### Docker Volumes
+
+The application uses a volume to persist data:
+
+```yaml
+# In docker-compose.yml:
+services:
+  legacy_scoring:
+    volumes:
+      - legacy_scoring_data:/app/data
+
+volumes:
+  legacy_scoring_data:
+```
+
+#### Development with Docker
+
+For development, you can mount your local source code:
+
+```yaml
+# In docker-compose.yml:
+services:
+  legacy_scoring:
+    volumes:
+      - .:/app
+      - legacy_scoring_data:/app/data
+
+volumes:
+  legacy_scoring_data:
+```
+
+#### Troubleshooting Docker
+
+Common issues and solutions:
+
+1. GUI not displaying:
+   - Ensure DISPLAY variable is set correctly
+   - Check X11 forwarding configuration
+
+2. Data persistence issues:
+   - Verify volume mounting
+   - Check file permissions
+
+3. Port conflicts:
+   - Change port mapping: `-p 5001:5000`
 
 ### Manual Installation
 
@@ -82,35 +226,28 @@ legacy_scoring/
 
 ### Prerequisites
 
-- Python 3.9 or higher
-- Required packages listed in requirements.txt
+- Python 3.8 or higher
+- pip (Python package manager)
+- Docker (optional)
+
+### Environment Setup
+
+```bash
+# Create a virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Windows:
+venv\Scripts\activate
+# On Unix or MacOS:
+source venv/bin/activate
+
+# Install development dependencies
+pip install -r requirements-dev.txt
+```
 
 ### Running Tests
 
 ```bash
 pytest tests/
 ```
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## Technical Details
-
-- Built with Python 3.9+
-- GUI implemented using tkinter with ttkbootstrap
-- Data storage using JSON format
-- Modular architecture for easy maintenance
-- Comprehensive test suite
-
-## License
-
-MIT License
-
-## Support
-
-For support, please open an issue in the repository.
