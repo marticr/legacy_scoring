@@ -35,71 +35,55 @@ The application can be run using Docker in several ways:
 
 #### Quick Start with Docker Compose
 
+> **Important**: This is a GUI application, so special setup is required for the display to work.
+> This application currently only supports Linux systems.
+> The container will exit if the display setup is incorrect.
+
 ```bash
 # Build and run with Docker Compose
 docker-compose up --build
+```
 
-# Run in detached mode
+#### Display Setup (Required)
+
+Before running the application, set up X11 display forwarding:
+
+```bash
+# Allow X server connections (run this before starting the container)
+xhost +local:docker
+
+# Your docker-compose.yml should include:
+services:
+  legacy_scoring:
+    environment:
+      - DISPLAY=$DISPLAY
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    network_mode: host
+```
+
+#### Running the Application
+
+After setting up the display:
+```bash
+# Start the application
+docker-compose up
+
+# To run in background
 docker-compose up -d
+
+# View logs if running in background
+docker-compose logs -f
 
 # Stop the application
 docker-compose down
-
-# View logs
-docker-compose logs -f
-
-# Rebuild specific service
-docker-compose up --build legacy_scoring
 ```
 
-#### Accessing the GUI Application in Docker
-
-Since this is a GUI application using tkinter, accessing it in Docker requires some additional setup:
-
-##### Linux
-```bash
-# Allow X server connections
-xhost +local:docker
-
-# Add to docker-compose.yml:
-# services:
-#   legacy_scoring:
-#     environment:
-#       - DISPLAY=$DISPLAY
-#     volumes:
-#       - /tmp/.X11-unix:/tmp/.X11-unix
-#     network_mode: host
-```
-
-##### Windows with X Server (e.g., VcXsrv)
-1. Install and start VcXsrv Windows X Server
-2. Configure it to:
-   - Display number: 0
-   - Client: Start no client
-   - Extra settings: Disable access control
-3. Add to docker-compose.yml:
-```yaml
-services:
-  legacy_scoring:
-    environment:
-      - DISPLAY=host.docker.internal:0
-```
-
-##### macOS with XQuartz
-1. Install and start XQuartz
-2. Allow connections:
-```bash
-xhost +localhost
-```
-3. Add to docker-compose.yml:
-```yaml
-services:
-  legacy_scoring:
-    environment:
-      - DISPLAY=host.docker.internal:0
-```
-
-> Note: The GUI will appear directly on your desktop, not through a web browser, as this is a native application.
+> **Note**: The GUI window should appear directly on your desktop after starting the container.
+> If the container exits immediately, check your display setup and logs:
+> ```bash
+> docker-compose logs
+> ```
 
 #### Manual Docker Commands
 
@@ -165,20 +149,13 @@ volumes:
   legacy_scoring_data:
 ```
 
-#### Troubleshooting Docker
+#### Troubleshooting
 
-Common issues and solutions:
-
-1. GUI not displaying:
-   - Ensure DISPLAY variable is set correctly
-   - Check X11 forwarding configuration
-
-2. Data persistence issues:
-   - Verify volume mounting
-   - Check file permissions
-
-3. Port conflicts:
-   - Change port mapping: `-p 5001:5000`
+If the container exits immediately:
+1. Check if X server is running and properly configured
+2. Verify DISPLAY environment variable is set correctly
+3. Ensure X server allows connections
+4. Run without `-d` flag to see error messages
 
 ### Manual Installation
 
