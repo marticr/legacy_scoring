@@ -1,0 +1,38 @@
+{
+    "modern": [
+        {
+            "id": 1,
+            "name": "Sarah Johnson"
+        },
+        {
+            "id": 2,
+            "name": "Michael Chen"
+        },
+        {
+            "id": 3,
+            "name": "Emma Davis"
+        },
+        {
+            "id": 4,
+            "name": "James Wilson"
+        }
+    ],
+    "urban": [
+        {
+            "id": 1,
+            "name": "Alex Rodriguez"
+        },
+        {
+            "id": 2,
+            "name": "Maya Patel"
+        },
+        {
+            "id": 3,
+            "name": "David Kim"
+        },
+        {
+            "id": 4,
+            "name": "Sophie Martin"
+        }
+    ]
+}

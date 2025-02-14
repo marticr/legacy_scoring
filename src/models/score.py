@@ -2,12 +2,13 @@ from dataclasses import dataclass
 
 @dataclass
 class Score:
-    technique: float
-    choreography: float
-    performance: float
-    expression: float
-    jury_member: int
-    participant_id: int
+    participant_id: int  # start_number
+    jury_id: int
+    technique: int
+    choreography: int
+    performance: int
+    expression: int
+    total: float
 
     @property
     def total(self) -> float:

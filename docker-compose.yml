@@ -3,10 +3,9 @@ version: '3.8'
 services:
   legacy_scoring:
     build: .
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/app/data
     environment:
-      - DISPLAY=${DISPLAY}
-    network_mode: "host" # Needed for GUI in Linux 
+      - DISPLAY=$DISPLAY
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./data:/app/data
+    network_mode: host

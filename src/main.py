@@ -1,4 +1,4 @@
-from gui.app import ScoringApp
+from src.gui.app import ScoringApp
 
 def main():
     app = ScoringApp()

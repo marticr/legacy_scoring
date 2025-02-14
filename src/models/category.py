@@ -1,17 +1,17 @@
 from enum import Enum
 
 class AgeGroup(Enum):
-    MINI = "Mini"
-    KIDS = "Kids"
-    JUNIORS = "Juniors"
-    TEENS = "Teens"
-    ADULTS = "Adults"
+    MINI = "mini"
+    KIDS = "kids"
+    JUNIORS = "juniors"
+    TEENS = "teens"
+    ADULTS = "adults"
 
 class Style(Enum):
-    MODERN = "Modern"
-    URBAN = "Urban"
+    MODERN = "modern"
+    URBAN = "urban"
 
 class Category(Enum):
-    SOLO = "Solo"
-    DUO = "Duo"
-    TEAMS = "Teams" 
+    SOLO = "solo"
+    DUO = "duo"
+    TEAMS = "teams" 
