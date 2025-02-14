@@ -1,6 +1,24 @@
 # Legacy Scoring Application
 
-A professional scoring application for dance competitions, supporting Modern and Urban styles with multiple categories and age groups.
+A scoring application for dance competitions.
+
+## Setup
+
+1. Install Docker and Docker Compose
+2. Run `docker-compose up --build`
+
+## Development
+
+- Data files are stored in `./data`
+- Source code is in `./src`
+- GUI is built with PySide6 (Qt)
+
+## Usage
+
+1. Select style (Modern/Urban)
+2. Navigate through participants
+3. Enter scores for each jury member
+4. View rankings in the Rankings tab
 
 ## Features
 
@@ -166,26 +184,6 @@ pip install -r requirements.txt
 # Run the application
 python src/main.py
 ```
-
-## Usage
-
-1. Select the style tab (Modern/Urban)
-2. Enter participant information:
-   - Start number
-   - Name
-   - Category (Solo/Duo/Teams)
-   - Age group
-3. Input jury scores:
-   - Technique (max 30 points)
-   - Choreography (max 30 points)
-   - Performance (max 30 points)
-   - Expression (max 10 points)
-4. Click "Calculate" to see:
-   - Individual totals
-   - Average score (out of 100)
-5. Save scores using the "Save" button
-6. View rankings and results
-7. Use "Clear" to reset the form
 
 ## Project Structure
 

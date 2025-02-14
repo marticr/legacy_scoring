@@ -1,12 +1,14 @@
-from tkinter import ttk
-import tkinter as tk
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTableView, QHeaderView, 
+                              QStyledItemDelegate, QStyleOptionViewItem)
+from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex
+from PySide6.QtGui import QColor, QBrush, QFont
 from src.models.category import Style, Category, AgeGroup
 from src.utils.translations import TRANSLATIONS
+from src.models.participant import Participant
 import json
-from typing import Dict, List
 from dataclasses import dataclass
 from collections import defaultdict
-from src.models.participant import Participant
+from typing import Dict, List
 
 @dataclass
 class RankingEntry:
@@ -16,17 +18,104 @@ class RankingEntry:
     age_group: AgeGroup
     score: float
 
-class RankingsFrame(ttk.Frame):
-    def __init__(self, parent, language='english'):
+class RankingsModel(QAbstractTableModel):
+    def __init__(self):
+        super().__init__()
+        self.rankings = []
+        self.headers = ['#', 'Name', 'Score']
+        self.group_headers = []
+        
+    def rowCount(self, parent=None):
+        return len(self.rankings) + len(self.group_headers)
+        
+    def columnCount(self, parent=None):
+        return len(self.headers)
+        
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+            
+        row = index.row()
+        col = index.column()
+        
+        # Check if this is a group header row
+        if row in self.group_headers:
+            if role == Qt.DisplayRole and col == 1:
+                return self.group_headers[row]
+            elif role == Qt.BackgroundRole:
+                return QBrush(QColor("#333333"))
+            elif role == Qt.FontRole:
+                font = QFont()
+                font.setBold(True)
+                return font
+            return None
+            
+        # Regular data row
+        entry = self.rankings[row - len(self.group_headers)]
+        
+        if role == Qt.DisplayRole:
+            if col == 0:
+                return str(row + 1)
+            elif col == 1:
+                return entry.name
+            elif col == 2:
+                return f"{entry.score:.1f}"
+                
+        elif role == Qt.TextAlignmentRole:
+            if col in [0, 2]:  # Rank and Score columns
+                return Qt.AlignCenter
+            return Qt.AlignLeft
+            
+        return None
+        
+    def headerData(self, section, orientation, role):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.headers[section]
+        return None
+
+class RankingsFrame(QWidget):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.language = language
+        self.language = 'english'
         self.rankings = defaultdict(list)
+        self.participants = {}
         self.age_order = ['mini', 'kids', 'juniors', 'teens', 'adults']
         self.category_order = ['solo', 'duo', 'team']
-        self.participants = {}  # Cache for participant info
-        self.create_widgets()
+        self.setup_ui()
         self.load_participants()
         self.load_rankings()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Create table view
+        self.table = QTableView()
+        self.model = RankingsModel()
+        self.table.setModel(self.model)
+        
+        # Configure table appearance
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
+        self.table.setSelectionMode(QTableView.NoSelection)
+        self.table.setAlternatingRowColors(True)
+        
+        # Style the table
+        self.table.setStyleSheet("""
+            QTableView {
+                border: 1px solid #444;
+                gridline-color: #444;
+                background-color: #2b2b2b;
+                alternate-background-color: #333333;
+            }
+            QHeaderView::section {
+                background-color: #444;
+                padding: 6px;
+                border: none;
+                border-right: 1px solid #555;
+            }
+        """)
+        
+        layout.addWidget(self.table)
 
     def load_participants(self):
         try:
@@ -40,90 +129,6 @@ class RankingsFrame(ttk.Frame):
 
     def get_participant_info(self, participant_id: int) -> Participant:
         return self.participants.get(int(participant_id))
-
-    def create_widgets(self):
-        # Create notebook for Modern/Urban tabs
-        self.style_notebook = ttk.Notebook(self)
-        self.style_notebook.pack(fill='both', expand=True)
-
-        # Create frames for each style
-        self.modern_frame = self.create_style_frame(Style.MODERN)
-        self.urban_frame = self.create_style_frame(Style.URBAN)
-
-        self.style_notebook.add(self.modern_frame, text="Modern Rankings")
-        self.style_notebook.add(self.urban_frame, text="Urban Rankings")
-
-        # Create Top 3 frame
-        self.create_top3_frame()
-        
-        # Create Overall Highest Score frame
-        self.create_highest_score_frame()
-
-    def create_style_frame(self, style: Style) -> ttk.Frame:
-        frame = ttk.Frame(self.style_notebook)
-        
-        # Create treeview for rankings
-        tree = ttk.Treeview(frame, columns=('rank', 'name', 'score'),
-                           show='headings')
-        
-        tree.heading('rank', text='Rank')
-        tree.heading('name', text='Name')
-        tree.heading('score', text='Score')
-        
-        # Set column widths and alignment
-        tree.column('rank', width=50, anchor='center')
-        tree.column('name', width=200)
-        tree.column('score', width=100, anchor='center')
-        
-        # Add scrollbar
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=scrollbar.set)
-        
-        # Pack with scrollbar
-        scrollbar.pack(side='right', fill='y')
-        tree.pack(fill='both', expand=True)
-        
-        # Store treeview reference
-        setattr(self, f"{style.value}_tree", tree)
-        
-        return frame
-
-    def create_top3_frame(self):
-        self.top3_frame = ttk.LabelFrame(self, text="Top 3 Per Category")
-        self.top3_frame.pack(fill='x', padx=5, pady=5)
-        
-        # Create treeview for top 3
-        self.top3_tree = ttk.Treeview(self.top3_frame, columns=('rank', 'name', 'category', 'age', 'score'),
-                                     show='headings', height=20)
-        
-        # Configure columns
-        self.top3_tree.heading('rank', text='Rank')
-        self.top3_tree.heading('name', text='Name')
-        self.top3_tree.heading('category', text='Category')
-        self.top3_tree.heading('age', text='Age Group')
-        self.top3_tree.heading('score', text='Score')
-        
-        # Set column widths and alignment
-        self.top3_tree.column('rank', width=50, anchor='center')
-        self.top3_tree.column('name', width=200)
-        self.top3_tree.column('category', width=100, anchor='center')
-        self.top3_tree.column('age', width=100, anchor='center')
-        self.top3_tree.column('score', width=100, anchor='center')
-        
-        # Add scrollbar
-        scrollbar = ttk.Scrollbar(self.top3_frame, orient="vertical", command=self.top3_tree.yview)
-        self.top3_tree.configure(yscrollcommand=scrollbar.set)
-        
-        # Pack with scrollbar
-        scrollbar.pack(side='right', fill='y')
-        self.top3_tree.pack(fill='both', expand=True, padx=5, pady=5)
-
-    def create_highest_score_frame(self):
-        self.highest_frame = ttk.LabelFrame(self, text="Overall Highest Score")
-        self.highest_frame.pack(fill='x', padx=5, pady=5)
-        
-        self.highest_label = ttk.Label(self.highest_frame, text="-")
-        self.highest_label.pack(padx=5, pady=5)
 
     def load_rankings(self):
         try:
@@ -185,58 +190,34 @@ class RankingsFrame(ttk.Frame):
             print(f"Sorted rankings: {[(e.name, e.score) for e in rankings]}")
 
     def update_rankings_display(self):
-        for style in [Style.MODERN, Style.URBAN]:
-            tree = getattr(self, f"{style.value}_tree")
-            tree.delete(*tree.get_children())
-            
-            # Display rankings by age group and category
-            for age in self.age_order:
-                tree.insert('', 'end', values=('', f'{age.upper()}', ''))
-                
-                for category in self.category_order:
-                    tree.insert('', 'end', values=('', f'{category.upper()}', ''))
-                    
-                    # Get and sort entries for this age/category
-                    key = (style.value, category, age)
-                    entries = self.rankings[key]
-                    entries.sort(key=lambda x: x.score, reverse=True)
-                    
-                    for rank, entry in enumerate(entries, 1):
-                        tree.insert('', 'end', values=(
-                            rank,
-                            entry.name,
-                            f"{entry.score:.1f}"
-                        ))
-
-    def update_top3_display(self):
-        # Clear existing entries
-        self.top3_tree.delete(*self.top3_tree.get_children())
+        self.model.beginResetModel()
+        
+        # Clear existing data
+        self.model.rankings = []
+        self.model.group_headers = []
         
         for style in [Style.MODERN, Style.URBAN]:
-            # Add style header
-            style_id = self.top3_tree.insert('', 'end', values=('', f'=== {style.value.upper()} ===', '', '', ''))
-            
             for age in self.age_order:
-                # Add age group header
-                age_id = self.top3_tree.insert('', 'end', values=('', f'--- {age.upper()} ---', '', '', ''))
-                
                 for category in self.category_order:
                     key = (style.value, category, age)
                     entries = self.rankings[key]
-                    entries.sort(key=lambda x: x.score, reverse=True)
-                    
                     if entries:
-                        # Add category header
-                        cat_id = self.top3_tree.insert('', 'end', values=('', f'> {category.upper()}', '', '', ''))
-                        
-                        for rank, entry in enumerate(entries[:3], 1):
-                            self.top3_tree.insert('', 'end', values=(
-                                rank,
-                                entry.name,
-                                entry.category.value,
-                                entry.age_group.value,
-                                f"{entry.score:.1f}"
-                            ))
+                        # Add group header
+                        self.model.group_headers.append(
+                            f"{age.upper()} | {category.upper()}"
+                        )
+                        # Add entries
+                        self.model.rankings.extend(sorted(
+                            entries, 
+                            key=lambda x: x.score, 
+                            reverse=True
+                        ))
+        
+        self.model.endResetModel()
+
+    def update_top3_display(self):
+        # Top 3 display is now handled by the main rankings display
+        pass
 
     def update_highest_score_display(self):
         highest_score = 0
@@ -248,11 +229,14 @@ class RankingsFrame(ttk.Frame):
                 highest_entry = entries[0]
         
         if highest_entry:
-            self.highest_label.config(
-                text=f"Highest Score: {highest_entry.name} ({highest_entry.start_number}) "
-                     f"- {highest_score:.1f}")
+            print(f"Highest score: {highest_entry.name} - {highest_score:.1f}")
 
     def refresh_rankings(self):
         """Reload and redisplay all rankings"""
         self.rankings.clear()  # Clear existing rankings
         self.load_rankings()   # Reload from scores.json 
+
+    def update_language(self, lang):
+        self.language = lang
+        # Update any text that needs translation
+        self.update_rankings_display() 

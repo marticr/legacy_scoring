@@ -1,307 +1,284 @@
-from tkinter import ttk, messagebox
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+                              QLabel, QSpinBox, QPushButton, QGroupBox,
+                              QFrame, QMessageBox, QSizePolicy)
+from PySide6.QtCore import Signal, Qt
 from src.models.category import Style
-from src.utils.translations import TRANSLATIONS
-from typing import List
-from src.models.participant import Participant
 from src.models.jury import JuryMember
+from src.models.participant import Participant
+from src.utils.translations import TRANSLATIONS
 import json
 
-class StyleFrame(ttk.Frame):
-    def __init__(self, parent, style: Style, jury_members: List[JuryMember], language='english'):
+class ScoreInput(QSpinBox):
+    def __init__(self, max_value=30, parent=None):
+        super().__init__(parent)
+        self.setRange(0, max_value)
+        self.setStyleSheet("""
+            QSpinBox {
+                background-color: #333;
+                color: white;
+                border: 1px solid #555;
+                padding: 5px;
+                min-width: 60px;
+            }
+            QSpinBox:focus {
+                border: 1px solid #666;
+            }
+        """)
+
+class StyleFrame(QWidget):
+    scores_updated = Signal()
+
+    def __init__(self, style: Style, parent=None):
         super().__init__(parent)
         self.style = style
-        self.language = language
-        self.jury_members = jury_members
-        self.current_participant_index = 0
+        self.current_participant_idx = 0
         self.participants = []
-        self.scores = {}  # Dict to store scores: {participant_id: {jury_id: Score}}
-        self.on_scores_updated = None  # Callback for when scores change
+        self.jury_members = []
+        self.scores = {}
         
-        # Create all the widgets for this style
-        self.create_navigation()
-        self.create_info_panel()
-        self.create_scoring_panel()
-        self.create_results_panel()
+        self.load_jury_members()
+        self.load_participants()
+        self.setup_ui()
         self.load_scores()
-        
-    def create_navigation(self):
-        nav_frame = ttk.Frame(self)
-        nav_frame.pack(fill='x', padx=5, pady=5)
-        
-        self.prev_button = ttk.Button(nav_frame, text=TRANSLATIONS[self.language]['previous'],
-                                    command=lambda: self.navigate(-1))
-        self.prev_button.configure(cursor="hand2")
-        self.prev_button.pack(side='left', padx=5)
-        
-        self.next_button = ttk.Button(nav_frame, text=TRANSLATIONS[self.language]['next'],
-                                    command=lambda: self.navigate(1))
-        self.next_button.configure(cursor="hand2")
-        self.next_button.pack(side='left', padx=5)
-        
-    def create_info_panel(self):
-        self.info_frame = ttk.LabelFrame(self, text=TRANSLATIONS[self.language]['participant_info'])
-        self.info_frame.pack(fill='x', padx=5, pady=5)
-        
-        # Create labels for participant info
-        self.start_number_label = ttk.Label(self.info_frame, text="-")
-        self.name_label = ttk.Label(self.info_frame, text="-")
-        self.category_label = ttk.Label(self.info_frame, text="-")
-        self.age_group_label = ttk.Label(self.info_frame, text="-")
-        
-        # Grid layout for info labels
-        self.start_number_label.grid(row=0, column=0, padx=5, pady=5)
-        self.name_label.grid(row=0, column=1, padx=5, pady=5)
-        self.category_label.grid(row=0, column=2, padx=5, pady=5)
-        self.age_group_label.grid(row=0, column=3, padx=5, pady=5)
 
-    def create_scoring_panel(self):
-        self.scoring_frame = ttk.LabelFrame(self, text=TRANSLATIONS[self.language]['scores'])
-        self.scoring_frame.pack(fill='both', expand=True, padx=5, pady=5)
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Navigation
+        nav_layout = QHBoxLayout()
+        self.prev_button = QPushButton("Previous")
+        self.next_button = QPushButton("Next")
+        self.prev_button.clicked.connect(self.previous_participant)
+        self.next_button.clicked.connect(self.next_participant)
+        nav_layout.addWidget(self.prev_button)
+        nav_layout.addWidget(self.next_button)
+        layout.addLayout(nav_layout)
+
+        # Participant Info
+        info_group = QGroupBox("Participant Info")
+        info_layout = QGridLayout()
+        self.start_number_label = QLabel("-")
+        self.name_label = QLabel("-")
+        self.category_label = QLabel("-")
+        self.age_group_label = QLabel("-")
         
-        # Create headers
-        headers = [
-            TRANSLATIONS[self.language]['jury_member'],
-            TRANSLATIONS[self.language]['technique'],
-            TRANSLATIONS[self.language]['choreography'],
-            TRANSLATIONS[self.language]['performance'],
-            TRANSLATIONS[self.language]['expression'],
-            TRANSLATIONS[self.language]['jury_total']
-        ]
+        info_layout.addWidget(QLabel("Start Number:"), 0, 0)
+        info_layout.addWidget(self.start_number_label, 0, 1)
+        info_layout.addWidget(QLabel("Name:"), 1, 0)
+        info_layout.addWidget(self.name_label, 1, 1)
+        info_layout.addWidget(QLabel("Category:"), 2, 0)
+        info_layout.addWidget(self.category_label, 2, 1)
+        info_layout.addWidget(QLabel("Age Group:"), 3, 0)
+        info_layout.addWidget(self.age_group_label, 3, 1)
         
+        info_group.setLayout(info_layout)
+        layout.addWidget(info_group)
+
+        # Scoring Panel
+        scoring_group = QGroupBox("Scores")
+        scoring_layout = QGridLayout()
+
+        # Headers
+        headers = ['Jury', 'Technique (30)', 'Choreography (30)', 
+                  'Performance (30)', 'Expression (10)', 'Total']
         for col, header in enumerate(headers):
-            ttk.Label(self.scoring_frame, text=header).grid(row=0, column=col, padx=5, pady=5)
+            label = QLabel(header)
+            label.setAlignment(Qt.AlignCenter)
+            scoring_layout.addWidget(label, 0, col)
+
+        # Score inputs
+        self.score_inputs = {}  # {jury_id: [technique, choreography, performance, expression, total]}
+        for row, jury in enumerate(self.jury_members, 1):
+            scoring_layout.addWidget(QLabel(jury.name), row, 0)
             
-        # Create entry fields for jury members
-        self.score_entries = []
-        for idx, jury in enumerate(self.jury_members):
-            row_entries = []
-            ttk.Label(self.scoring_frame, text=jury.name).grid(row=idx+1, column=0, padx=5, pady=5)
-            
+            row_inputs = []
             for col in range(4):
-                entry = ttk.Entry(self.scoring_frame, width=10)
-                entry.grid(row=idx+1, column=col+1, padx=5, pady=5)
-                entry.bind('<KeyRelease>', lambda e, c=col, r=idx: self.validate_and_update(e, c, r))
-                row_entries.append(entry)
+                max_score = 10 if col == 3 else 30
+                score_input = ScoreInput(max_score)
+                score_input.valueChanged.connect(self.calculate_scores)
+                scoring_layout.addWidget(score_input, row, col + 1)
+                row_inputs.append(score_input)
             
-            total_label = ttk.Label(self.scoring_frame, text="0")
-            total_label.grid(row=idx+1, column=5, padx=5, pady=5)
-            row_entries.append(total_label)
+            total_label = QLabel("0.0")
+            total_label.setAlignment(Qt.AlignCenter)
+            scoring_layout.addWidget(total_label, row, 5)
+            row_inputs.append(total_label)
             
-            self.score_entries.append(row_entries)
-            
-    def create_results_panel(self):
-        self.results_frame = ttk.LabelFrame(self, text=TRANSLATIONS[self.language]['results'])
-        self.results_frame.pack(fill='x', padx=5, pady=5)
-        
-        ttk.Label(self.results_frame, text=TRANSLATIONS[self.language]['total_score']).grid(row=0, column=0, padx=5, pady=5)
-        self.average_label = ttk.Label(self.results_frame, text="0")
-        self.average_label.grid(row=0, column=1, padx=5, pady=5)
+            self.score_inputs[jury.id] = row_inputs
 
-    def set_participants(self, participants: List[Participant]):
-        self.participants = participants
-        self.current_participant_index = 0
-        self.update_display()
-        self.update_navigation()
+        # Add spacer at bottom
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(spacer)
 
-    def navigate(self, direction: int):
-        if not self.participants:
-            return
-            
-        max_index = len(self.participants) - 1
-        self.current_participant_index = (self.current_participant_index + direction) % (max_index + 1)
-        
-        self.clear_form()
+        scoring_group.setLayout(scoring_layout)
+        layout.addWidget(scoring_group)
+
+        # Style
+        self.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #444;
+                margin-top: 1ex;
+                padding: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px;
+            }
+            QPushButton {
+                background-color: #444;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background-color: #555;
+            }
+            QLabel {
+                color: white;
+            }
+        """)
+
         self.update_display()
-        self.update_navigation()
-        
-    def update_display(self):
-        if not self.participants:
-            self.clear_info()
-            return
-            
-        participant = self.participants[self.current_participant_index]
-        # Load saved scores if they exist
-        if participant.start_number in self.scores:
-            self.load_participant_scores(participant.start_number)
-        
-        t = TRANSLATIONS[self.language]
-        
-        self.start_number_label.config(text=f"{t['start_number']}: {participant.start_number}")
-        self.name_label.config(text=f"{t['name']}: {participant.name}")
-        self.category_label.config(text=f"{t['category']}: {participant.category.value}")
-        self.age_group_label.config(text=f"{t['age_group']}: {participant.age_group.value}")
-        
-        self.update()
-        
-    def clear_info(self):
-        self.start_number_label.config(text="-")
-        self.name_label.config(text="-")
-        self.category_label.config(text="-")
-        self.age_group_label.config(text="-")
-        
-    def update_navigation(self):
-        if not self.participants:
-            self.prev_button.configure(state='disabled')
-            self.next_button.configure(state='disabled')
-            return
-            
-        self.prev_button.configure(state='normal' if self.current_participant_index > 0 else 'disabled')
-        self.next_button.configure(state='normal' if self.current_participant_index < len(self.participants) - 1 else 'disabled')
-        
-    def validate_and_update(self, event, col, row):
-        entry = event.widget
-        value = entry.get().strip()
-        
-        if not value:  # Skip validation for empty fields
-            self.calculate_scores()
-            return
-            
+
+    def load_jury_members(self):
         try:
-            score = int(value)
-            max_score = 10 if col == 3 else 30  # Expression max is 10, others are 30
-            
-            if 0 <= score <= max_score:
-                self.calculate_scores()
-            else:
-                messagebox.showerror("Invalid Input", f"Score must be between 0 and {max_score}")
-                entry.delete(0, "end")
-        except ValueError:
-            pass
-            
-    def calculate_scores(self):
-        for row_idx, row in enumerate(self.score_entries):
-            try:
-                scores = [float(entry.get() or 0) for entry in row[:-1]]
-                jury_total = sum(scores)
-                row[-1].configure(text=f"{jury_total:.1f}")
-                
-                # Save scores
-                if self.participants:  # Only save if we have participants
-                    participant = self.participants[self.current_participant_index]
-                    jury = self.jury_members[row_idx]
-                    
-                    if participant.start_number not in self.scores:
-                        self.scores[participant.start_number] = {}
-                        
-                    self.scores[participant.start_number][str(jury.id)] = {
-                        'technique': scores[0],
-                        'choreography': scores[1],
-                        'performance': scores[2],
-                        'expression': scores[3],
-                        'total': jury_total
-                    }
-                    
-                    self.save_scores()
-            except ValueError:
-                row[-1].configure(text="0.0")
-                
-        # Calculate final total after all jury scores are saved
-        if self.participants:
-            participant = self.participants[self.current_participant_index]
-            if participant.start_number in self.scores:
-                jury_totals = []
-                for jury_id, jury_data in self.scores[participant.start_number].items():
-                    if jury_id != 'final_total' and isinstance(jury_data, dict) and 'total' in jury_data:
-                        jury_totals.append(jury_data['total'])
-                
-                if jury_totals:
-                    participant_total = sum(jury_totals) / len(jury_totals)
-                    print(f"Final total for participant {participant.start_number}: {participant_total}")
-                    self.scores[participant.start_number]['final_total'] = participant_total
-                    self.save_scores()
-        
-        self.calculate_average()
-        
-    def calculate_average(self):
+            with open('data/jury_config.json', 'r') as f:
+                data = json.load(f)
+                self.jury_members = [
+                    JuryMember(member['id'], member['name'])
+                    for member in data.get('jury_members', [])
+                ]
+        except Exception as e:
+            print(f"Error loading jury members: {e}")
+            self.jury_members = []
+
+    def load_participants(self):
         try:
-            jury_scores = [float(row[-1].cget("text")) for row in self.score_entries]
-            total_score = sum(jury_scores) / len(jury_scores)
-            self.average_label.configure(text=f"{total_score:.1f}")
-        except ValueError:
-            self.average_label.configure(text="0.0")
-            
-    def clear_form(self):
-        for row in self.score_entries:
-            for entry in row[:-1]:
-                entry.delete(0, "end")
-            row[-1].configure(text="0.0")
-        self.average_label.configure(text="0.0")
-        
-    def update_language(self, language: str):
-        self.language = language
-        t = TRANSLATIONS[language]
-        
-        # Update all text elements
-        self.info_frame.configure(text=t['participant_info'])
-        self.scoring_frame.configure(text=t['scores'])
-        self.results_frame.configure(text=t['results'])
-        self.prev_button.configure(text=t['previous'])
-        self.next_button.configure(text=t['next'])
-        
-        # Update the current display
-        self.update_display() 
+            with open('data/participants.csv', 'r') as f:
+                self.participants = []
+                for line in f:
+                    participant = Participant.from_csv_line(line.strip())
+                    if participant.style == self.style:
+                        self.participants.append(participant)
+            self.update_navigation()
+        except Exception as e:
+            print(f"Error loading participants: {e}")
 
     def load_scores(self):
         try:
-            with open('data/scores.json', 'r') as file:
-                all_scores = json.load(file)
-                # Filter scores for this style
-                style_scores = all_scores.get(self.style.value, {})
-                self.scores = {int(k): v for k, v in style_scores.items()}
+            with open('data/scores.json', 'r') as f:
+                data = json.load(f)
+                self.scores = data.get(self.style.value, {})
         except FileNotFoundError:
-            print("No previous scores found")
+            self.scores = {}
         except Exception as e:
-            print(f"Error loading scores: {str(e)}")
+            print(f"Error loading scores: {e}")
+            self.scores = {}
+        
+        self.update_display()
 
     def save_scores(self):
         try:
-            # Load existing scores first
+            # Load existing scores
             try:
-                with open('data/scores.json', 'r') as file:
-                    all_scores = json.load(file)
+                with open('data/scores.json', 'r') as f:
+                    all_scores = json.load(f)
             except FileNotFoundError:
                 all_scores = {}
-            
+
             # Update scores for this style
             all_scores[self.style.value] = self.scores
-            
-            # Save back to file
-            with open('data/scores.json', 'w') as file:
-                json.dump(all_scores, file, indent=2)
-            
-            # Notify that scores have been updated
-            if self.on_scores_updated:
-                self.on_scores_updated()
-        except Exception as e:
-            print(f"Error saving scores: {str(e)}")
-            messagebox.showerror("Error", f"Could not save scores: {str(e)}")
 
-    def load_participant_scores(self, participant_id: int):
-        if participant_id not in self.scores:
+            # Save back to file
+            with open('data/scores.json', 'w') as f:
+                json.dump(all_scores, f, indent=2)
+
+            self.scores_updated.emit()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not save scores: {str(e)}")
+
+    def calculate_scores(self):
+        if not self.participants:
             return
-            
-        participant_scores = self.scores[participant_id]
-        # Skip the 'final_total' key which isn't a jury score
-        for jury_id_str, score_data in participant_scores.items():
-            if jury_id_str == 'final_total':
-                continue
-            
-            jury_id = int(jury_id_str)  # Convert string ID to int
-            try:
-                jury_idx = next(i for i, j in enumerate(self.jury_members) if j.id == jury_id)
-                row = self.score_entries[jury_idx]
-                
-                # Clear any existing values first
-                for entry in row[:-1]:
-                    entry.delete(0, "end")
-                
-                # Fill in the scores
-                row[0].insert(0, str(score_data['technique']))
-                row[1].insert(0, str(score_data['choreography']))
-                row[2].insert(0, str(score_data['performance']))
-                row[3].insert(0, str(score_data['expression']))
-            except StopIteration:
-                print(f"Warning: Jury member {jury_id} not found")
-                continue
+
+        participant = self.participants[self.current_participant_idx]
+        participant_scores = {}
+
+        for jury_id, inputs in self.score_inputs.items():
+            if all(input.value() > 0 for input in inputs[:-1]):  # Exclude total label
+                total = sum(input.value() for input in inputs[:-1])
+                inputs[-1].setText(f"{total:.1f}")  # Update total label
+                participant_scores[str(jury_id)] = {
+                    'technique': inputs[0].value(),
+                    'choreography': inputs[1].value(),
+                    'performance': inputs[2].value(),
+                    'expression': inputs[3].value(),
+                    'total': total
+                }
+
+        if participant_scores:
+            # Calculate final total if all jury members have scored
+            if len(participant_scores) == len(self.jury_members):
+                final_total = sum(s['total'] for s in participant_scores.values()) / len(participant_scores)
+                participant_scores['final_total'] = final_total
+
+            self.scores[str(participant.start_number)] = participant_scores
+            self.save_scores()
+
+    def update_display(self):
+        if not self.participants:
+            self.clear_display()
+            return
+
+        participant = self.participants[self.current_participant_idx]
         
-        self.calculate_scores() 
+        # Update info labels
+        self.start_number_label.setText(str(participant.start_number))
+        self.name_label.setText(participant.name)
+        self.category_label.setText(participant.category.value)
+        self.age_group_label.setText(participant.age_group.value)
+
+        # Load existing scores
+        participant_scores = self.scores.get(str(participant.start_number), {})
+        
+        # Update score inputs
+        for jury_id, inputs in self.score_inputs.items():
+            jury_scores = participant_scores.get(str(jury_id), {})
+            inputs[0].setValue(jury_scores.get('technique', 0))
+            inputs[1].setValue(jury_scores.get('choreography', 0))
+            inputs[2].setValue(jury_scores.get('performance', 0))
+            inputs[3].setValue(jury_scores.get('expression', 0))
+
+    def clear_display(self):
+        self.start_number_label.setText("-")
+        self.name_label.setText("-")
+        self.category_label.setText("-")
+        self.age_group_label.setText("-")
+        
+        for inputs in self.score_inputs.values():
+            for input in inputs:
+                input.setValue(0)
+
+    def update_navigation(self):
+        self.prev_button.setEnabled(self.current_participant_idx > 0)
+        self.next_button.setEnabled(self.current_participant_idx < len(self.participants) - 1)
+
+    def previous_participant(self):
+        if self.current_participant_idx > 0:
+            self.current_participant_idx -= 1
+            self.update_display()
+            self.update_navigation()
+
+    def next_participant(self):
+        if self.current_participant_idx < len(self.participants) - 1:
+            self.current_participant_idx += 1
+            self.update_display()
+            self.update_navigation()
+
+    def update_language(self, lang):
+        t = TRANSLATIONS[lang]
+        self.prev_button.setText(t['previous'])
+        self.next_button.setText(t['next'])

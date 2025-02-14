@@ -1,38 +1,16 @@
 {
-    "modern": [
+    "jury_members": [
         {
             "id": 1,
-            "name": "Sarah Johnson"
+            "name": "Jury 1"
         },
         {
             "id": 2,
-            "name": "Michael Chen"
+            "name": "Jury 2"
         },
         {
             "id": 3,
-            "name": "Emma Davis"
-        },
-        {
-            "id": 4,
-            "name": "James Wilson"
-        }
-    ],
-    "urban": [
-        {
-            "id": 1,
-            "name": "Alex Rodriguez"
-        },
-        {
-            "id": 2,
-            "name": "Maya Patel"
-        },
-        {
-            "id": 3,
-            "name": "David Kim"
-        },
-        {
-            "id": 4,
-            "name": "Sophie Martin"
+            "name": "Jury 3"
         }
     ]
 }
